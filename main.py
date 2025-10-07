@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Literal
+from typing import Dict, Literal, Optional
 from dataclasses import dataclass
 
 # Precision to bytes mapping
@@ -29,7 +29,10 @@ class MoEConfig:
     @classmethod
     def from_dict(cls, config: Dict) -> 'MoEConfig':
         """Create config from dictionary"""
-        return cls(**config)
+        # Remove non-MoEConfig fields
+        config_params = {k: v for k, v in config.items() 
+                        if k in ['V', 'h', 'l', 'a', 'N', 'f_mult', 's', 'top_k']}
+        return cls(**config_params)
     
     @classmethod
     def get_default_config(cls) -> Dict:
@@ -304,35 +307,76 @@ class MoEMemoryCalculator:
         }
 
 
-def load_config(config_path: str = None, config_dict: Dict = None) -> MoEConfig:
+def load_config_from_json(config_path: str = "moe_config.json", 
+                          config_name: str = "default") -> tuple[MoEConfig, str]:
     """
-    Load configuration from file or dictionary
+    Load configuration from JSON file
     
     Args:
         config_path: Path to JSON config file
-        config_dict: Dictionary with config parameters
+        config_name: Name of the configuration to load from the "configs" section
     
     Returns:
-        MoEConfig object
+        Tuple of (MoEConfig object, precision string)
     """
-    if config_path:
+    try:
         with open(config_path, 'r') as f:
-            config_data = json.load(f)
-    elif config_dict:
-        config_data = config_dict
-    else:
-        config_data = MoEConfig.get_default_config()
-    
-    return MoEConfig.from_dict(config_data)
+            data = json.load(f)
+        
+        if "configs" not in data:
+            raise ValueError("JSON file must contain a 'configs' section")
+        
+        if config_name not in data["configs"]:
+            available = ", ".join(data["configs"].keys())
+            raise ValueError(f"Config '{config_name}' not found. Available: {available}")
+        
+        config_data = data["configs"][config_name]
+        precision = config_data.get("precision", "bfloat16")
+        
+        config = MoEConfig.from_dict(config_data)
+        return config, precision
+        
+    except FileNotFoundError:
+        print(f"Config file '{config_path}' not found. Using default configuration.")
+        return MoEConfig.from_dict(MoEConfig.get_default_config()), "bfloat16"
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON file: {e}")
+        print("Using default configuration.")
+        return MoEConfig.from_dict(MoEConfig.get_default_config()), "bfloat16"
 
 
-def calculate_moe_metrics(config: MoEConfig, precision: PrecisionType) -> str:
+def list_available_configs(config_path: str = "moe_config.json"):
+    """List all available configurations in the JSON file"""
+    try:
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+        
+        if "configs" not in data:
+            print("No configurations found in file.")
+            return
+        
+        print("\nAvailable Configurations:")
+        print("=" * 50)
+        for name, config in data["configs"].items():
+            config_name = config.get("name", name)
+            print(f"  • {name}: {config_name}")
+        print("=" * 50)
+        
+    except FileNotFoundError:
+        print(f"Config file '{config_path}' not found.")
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON file: {e}")
+
+
+def calculate_moe_metrics(config: MoEConfig, precision: PrecisionType, 
+                         config_name: Optional[str] = None) -> str:
     """
     Main function to calculate memory requirements and FLOPs
     
     Args:
         config: MoEConfig object
         precision: Precision type for weights
+        config_name: Optional name of the configuration for display
     
     Returns:
         Formatted string with memory requirements and FLOPs
@@ -344,63 +388,63 @@ def calculate_moe_metrics(config: MoEConfig, precision: PrecisionType) -> str:
     prefill_tflops = metrics['prefill_flops'] / 1e12
     decode_tflops = metrics['decode_flops'] / 1e12
     
+    config_header = f" ({config_name})" if config_name else ""
+    
     result = f"""
-Memory Requirements for MoE Model
+Memory Requirements for MoE Model{config_header}
 {'=' * 50}
-Precision: {precision}
-Model Weights: {metrics['weights_gb']:.2f} GB
-KV-Cache: {metrics['kv_cache_gb']:.2f} GB
-{'=' * 50}
-TOTAL MEMORY NEEDED: {metrics['total_gb']:.2f} GB!
+Configuration:
+  Vocab Size (V): {config.V:,}
+  Hidden Size (h): {config.h:,}
+  Num Layers (l): {config.l}
+  Attention Heads (a): {config.a}
+  Num Experts (N): {config.N}
+  Expert Multiplier (f_mult): {config.f_mult}
+  Sequence Length (s): {config.s:,}
+  Top-K Experts: {config.top_k}
+  Precision: {precision}
 
-FLOPs Requirements
+Memory Breakdown:
+  Model Weights: {metrics['weights_gb']:.2f} GB
+  KV-Cache: {metrics['kv_cache_gb']:.2f} GB
 {'=' * 50}
-Prefill FLOPs: {prefill_tflops:.2f} TFLOPs
-Decode FLOPs (per token): {decode_tflops:.6f} TFLOPs
+TOTAL MEMORY NEEDED: {metrics['total_gb']:.2f} GB
+
+FLOPs Requirements:
+  Prefill FLOPs: {prefill_tflops:.2f} TFLOPs
+  Decode FLOPs (per token): {decode_tflops:.6f} TFLOPs
 {'=' * 50}
 """
     return result
 
 
 def main():
-    """Example usage"""
-    print("MoE Memory Calculator")
+    """Example usage with JSON config file"""
+    print("MoE Memory & FLOPs Calculator")
     print("=" * 50)
     
-    # Option 1: Use default config
-    print("\nUsing default configuration...")
-    config = load_config()
+    # List available configurations
+    list_available_configs()
     
-    # Option 2: Or load from dict
-    # custom_config = {
-    #     "V": 50000,
-    #     "h": 8192,
-    #     "l": 48,
-    #     "a": 64,
-    #     "N": 16,
-    #     "f_mult": 1.5,
-    #     "s": 4096,
-    #     "top_k": 2
-    # }
-    # config = load_config(config_dict=custom_config)
+    # Get config name from user
+    config_name = input("\nEnter config name (or press Enter for 'default'): ").strip()
+    if not config_name:
+        config_name = "default"
     
-    # Get precision from user
-    print("\nAvailable precisions: float32, bfloat16, float16, int8, int4")
-    precision_input = input("Enter precision (default: bfloat16): ").strip().lower()
-    
-    # Validate and set precision
-    if precision_input == "":
-        precision = "bfloat16"
-    elif precision_input in PRECISION_BYTES:
-        precision = precision_input
-    else:
-        print(f"Invalid precision '{precision_input}'. Using default: bfloat16")
-        precision = "bfloat16"
+    # Load configuration
+    config, precision = load_config_from_json(config_name=config_name)
     
     # Calculate and display results
-    print(calculate_moe_metrics(config, precision))
+    print(calculate_moe_metrics(config, precision, config_name))
+    
+    # Option to override precision
+    print("\nAvailable precisions: float32, bfloat16, float16, int8, int4")
+    override = input(f"Override precision (currently {precision}, press Enter to keep): ").strip().lower()
+    
+    if override and override in PRECISION_BYTES:
+        precision = override
+        print(calculate_moe_metrics(config, precision, config_name))
 
 
 if __name__ == "__main__":
     main()
-
