@@ -1,81 +1,12 @@
 {
-  "_comment": "Configuration file for MoE Memory and FLOPs Calculator",
-  "_description": {
-    "V": "Vocabulary size - number of unique tokens in the model's vocabulary",
-    "h": "Hidden size - dimension of the model's hidden states",
-    "l": "Number of layers - depth of the transformer model",
-    "a": "Number of attention heads - for multi-head attention mechanism",
-    "N": "Number of experts - total experts available in each MoE layer",
-    "f_mult": "Expert multiplier - FFN hidden dimension multiplier (typically 1.0-2.0)",
-    "s": "Sequence length - maximum context window for KV-cache calculation",
-    "top_k": "Top-k experts - number of experts activated per token",
-    "precision": "Weight precision - one of: float32, bfloat16, float16, int8, int4"
-  },
-  
-  "configs": {
-    "default": {
-      "name": "Default MoE Configuration",
-      "V": 32000,
-      "h": 4096,
-      "l": 32,
-      "a": 32,
-      "N": 8,
-      "f_mult": 1.25,
-      "s": 2048,
-      "top_k": 2,
-      "precision": "bfloat16"
-    },
-    
-    "mixtral_8x7b": {
-      "name": "Mixtral 8x7B (approximate)",
-      "V": 32000,
-      "h": 4096,
-      "l": 32,
-      "a": 32,
-      "N": 8,
-      "f_mult": 1.37,
-      "s": 32768,
-      "top_k": 2,
-      "precision": "bfloat16"
-    },
-    
-    "small_research": {
-      "name": "Small Research Model",
-      "V": 32000,
-      "h": 2048,
-      "l": 24,
-      "a": 16,
-      "N": 4,
-      "f_mult": 1.0,
-      "s": 2048,
-      "top_k": 2,
-      "precision": "float16"
-    },
-    
-    "large_scale": {
-      "name": "Large Scale MoE",
-      "V": 50000,
-      "h": 8192,
-      "l": 48,
-      "a": 64,
-      "N": 16,
-      "f_mult": 1.5,
-      "s": 4096,
-      "top_k": 2,
-      "precision": "bfloat16"
-    },
-    
-    "efficient_quantized": {
-      "name": "Efficient Quantized Model",
-      "V": 32000,
-      "h": 4096,
-      "l": 32,
-      "a": 32,
-      "N": 8,
-      "f_mult": 1.25,
-      "s": 2048,
-      "top_k": 2,
-      "precision": "int4"
-    }
-  }
+  "name": "Default MoE Configuration",
+  "V": 32000,
+  "h": 4096,
+  "l": 32,
+  "a": 32,
+  "N": 8,
+  "f_mult": 1.25,
+  "s": 2048,
+  "top_k": 2,
+  "precision": "bfloat16"
 }

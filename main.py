@@ -307,32 +307,21 @@ class MoEMemoryCalculator:
         }
 
 
-def load_config_from_json(config_path: str = "moe_config.json", 
-                          config_name: str = "default") -> tuple[MoEConfig, str]:
+def load_config_from_json(config_path: str = "moe_config.json") -> tuple[MoEConfig, str]:
     """
     Load configuration from JSON file
     
     Args:
         config_path: Path to JSON config file
-        config_name: Name of the configuration to load from the "configs" section
     
     Returns:
         Tuple of (MoEConfig object, precision string)
     """
     try:
         with open(config_path, 'r') as f:
-            data = json.load(f)
+            config_data = json.load(f)
         
-        if "configs" not in data:
-            raise ValueError("JSON file must contain a 'configs' section")
-        
-        if config_name not in data["configs"]:
-            available = ", ".join(data["configs"].keys())
-            raise ValueError(f"Config '{config_name}' not found. Available: {available}")
-        
-        config_data = data["configs"][config_name]
         precision = config_data.get("precision", "bfloat16")
-        
         config = MoEConfig.from_dict(config_data)
         return config, precision
         
@@ -349,17 +338,17 @@ def list_available_configs(config_path: str = "moe_config.json"):
     """List all available configurations in the JSON file"""
     try:
         with open(config_path, 'r') as f:
-            data = json.load(f)
+            configs = json.load(f)
         
-        if "configs" not in data:
-            print("No configurations found in file.")
+        if not isinstance(configs, list):
+            print("Config file must contain an array of configurations.")
             return
         
         print("\nAvailable Configurations:")
         print("=" * 50)
-        for name, config in data["configs"].items():
-            config_name = config.get("name", name)
-            print(f"  • {name}: {config_name}")
+        for i, config in enumerate(configs):
+            config_name = config.get("name", f"Config {i}")
+            print(f"  {i}: {config_name}")
         print("=" * 50)
         
     except FileNotFoundError:
@@ -426,15 +415,21 @@ def main():
     # List available configurations
     list_available_configs()
     
-    # Get config name from user
-    config_name = input("\nEnter config name (or press Enter for 'default'): ").strip()
-    if not config_name:
-        config_name = "default"
+    # Get config index from user
+    config_input = input("\nEnter config number (or press Enter for 0): ").strip()
+    config_index = 0
+    if config_input:
+        try:
+            config_index = int(config_input)
+        except ValueError:
+            print("Invalid input. Using config 0.")
+            config_index = 0
     
     # Load configuration
-    config, precision = load_config_from_json(config_name=config_name)
+    config, precision = load_config_from_json(config_index=config_index)
     
     # Calculate and display results
+    config_name = f"Config {config_index}"
     print(calculate_moe_metrics(config, precision, config_name))
     
     # Option to override precision
