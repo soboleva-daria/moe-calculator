@@ -79,33 +79,33 @@ class MoEMemoryCalculator:
     
     def calculate_attention_weights(self) -> int:
         """
-        Attention Weights (B) = 4 * k * h * (h + 1)
+        Attention Weights (B) = 4 * k * h^2
         4 weight matrices: query, key, value, output, each h x h
         """
         k = self.bytes_per_param
         h = self.config.h
-        return 4 * k * h * (h + 1)
+        return 4 * k * h ** 2
     
     def calculate_router_weights(self) -> int:
         """
-        Router Weights (B) = k * N * (h + 1)
-        Weight matrix of size h x N with learnable router weights
+        Router Weights (B) = k * N * h
+        Weight matrix of size N x h with learnable router weights
         """
         k = self.bytes_per_param
         N = self.config.N
         h = self.config.h
-        return k * N * (h + 1)
+        return k * N * h
     
     def calculate_moe_layer_weights(self) -> int:
         """
-        MoE Layer Weights (B) = k * N * h * (3 * f_mult * h + 2 * f_mult + 1)
+        MoE Layer Weights (B) = 3 * k * N * f_mult * h^2
         Each expert uses SwiGLU with three linear transformations
         """
         k = self.bytes_per_param
         N = self.config.N
         h = self.config.h
         f_mult = self.config.f_mult
-        return k * N * h * (3 * f_mult * h + 2 * f_mult + 1)
+        return 3 * k * N * f_mult * h ** 2
     
     def calculate_decoder_weights(self) -> int:
         """
@@ -145,15 +145,6 @@ class MoEMemoryCalculator:
     
     # ============ FLOPS CALCULATIONS ============
     
-    def calculate_embedding_flops(self) -> int:
-        """
-        Embedding Compute (FLOPs) = 4 * s * V * h
-        """
-        s = self.config.s
-        V = self.config.V
-        h = self.config.h
-        return 4 * s * V * h
-    
     def calculate_ln_flops(self) -> int:
         """
         LN Compute (FLOPs) = 14 * s * h
@@ -173,10 +164,11 @@ class MoEMemoryCalculator:
     
     def calculate_rope_flops(self) -> int:
         """
-        RoPE Compute (FLOPs) = 0.75 * h
+        RoPE Compute (FLOPs) = 0.75 * s * h
         """
+        s = self.config.s
         h = self.config.h
-        return 0.75 * h
+        return 0.75 * s * h
     
     def calculate_router_flops(self) -> int:
         """
@@ -189,17 +181,17 @@ class MoEMemoryCalculator:
     
     def calculate_moe_layer_flops(self) -> int:
         """
-        MoE Layer Compute (FLOPs) = 2 * top_k * s * f_mult * h * (4 * h + 3)
+        MoE Layer Compute (FLOPs) = 6 * top_k * s * f_mult * h * (h + 1)
         """
         top_k = self.config.top_k
         s = self.config.s
         f_mult = self.config.f_mult
         h = self.config.h
-        return 2 * top_k * s * f_mult * h * (4 * h + 3)
+        return 6 * top_k * s * f_mult * h * (h + 1)
     
-    def calculate_linear_layer_flops(self) -> int:
+    def calculate_unembedding_flops(self) -> int:
         """
-        Linear Layer Compute (FLOPs) = 2 * s * V * h
+        Unembedding Compute (FLOPs) = 2 * s * V * h
         """
         s = self.config.s
         V = self.config.V
@@ -220,13 +212,13 @@ class MoEMemoryCalculator:
     
     def calculate_prefill_flops(self) -> int:
         """
-        Prefill (FLOPs) = Embedding + l * Decoder
+        Prefill (FLOPs) = l * Decoder + Unembedding
         """
-        embedding = self.calculate_embedding_flops()
         decoder = self.calculate_decoder_flops()
+        unembedding = self.calculate_unembedding_flops()
         l = self.config.l
         
-        return embedding + l * decoder
+        return l * decoder + unembedding
     
     # Decode FLOPs calculations (with s=1)
     
@@ -264,20 +256,18 @@ class MoEMemoryCalculator:
     
     def calculate_decode_flops(self) -> int:
         """
-        Decode (FLOPs) = Embedding_{s=1} + l * Decoder w/ KV-Cache_{s=1}
+        Decode (FLOPs) = l * Decoder w/ KV-Cache_{s=1} + Unembedding_{s=1}
         """
-        original_s = self.config.s
-        
-        # Embedding uses s=1
-        self.config.s = 1
-        embedding = self.calculate_embedding_flops()
-        self.config.s = original_s
-        
         # Decoder uses KV-cache version
         decoder = self.calculate_decoder_flops_decode()
+
+        original_s = self.config.s
+        self.config.s = 1
+        unembedding = self.calculate_unembedding_flops()
+        self.config.s = original_s
         l = self.config.l
         
-        return embedding + l * decoder
+        return l * decoder + unembedding
     
     def calculate_total(self) -> Dict[str, float]:
         """
@@ -333,28 +323,6 @@ def load_config_from_json(config_path: str = "moe_config.json") -> tuple[MoEConf
         print("Using default configuration.")
         return MoEConfig.from_dict(MoEConfig.get_default_config()), "bfloat16"
 
-
-def list_available_configs(config_path: str = "moe_config.json"):
-    """List all available configurations in the JSON file"""
-    try:
-        with open(config_path, 'r') as f:
-            configs = json.load(f)
-        
-        if not isinstance(configs, list):
-            print("Config file must contain an array of configurations.")
-            return
-        
-        print("\nAvailable Configurations:")
-        print("=" * 50)
-        for i, config in enumerate(configs):
-            config_name = config.get("name", f"Config {i}")
-            print(f"  {i}: {config_name}")
-        print("=" * 50)
-        
-    except FileNotFoundError:
-        print(f"Config file '{config_path}' not found.")
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON file: {e}")
 
 
 def calculate_moe_metrics(config: MoEConfig, precision: PrecisionType, 
@@ -412,25 +380,8 @@ def main():
     print("MoE Memory & FLOPs Calculator")
     print("=" * 50)
     
-    # List available configurations
-    list_available_configs()
-    
-    # Get config index from user
-    config_input = input("\nEnter config number (or press Enter for 0): ").strip()
-    config_index = 0
-    if config_input:
-        try:
-            config_index = int(config_input)
-        except ValueError:
-            print("Invalid input. Using config 0.")
-            config_index = 0
-    
     # Load configuration
-    config, precision = load_config_from_json(config_index=config_index)
-    
-    # Calculate and display results
-    config_name = f"Config {config_index}"
-    print(calculate_moe_metrics(config, precision, config_name))
+    config, precision = load_config_from_json()
     
     # Option to override precision
     print("\nAvailable precisions: float32, bfloat16, float16, int8, int4")
@@ -438,7 +389,9 @@ def main():
     
     if override and override in PRECISION_BYTES:
         precision = override
-        print(calculate_moe_metrics(config, precision, config_name))
+    
+    # Calculate and display results (only once, with final precision)
+    print(calculate_moe_metrics(config, precision, "moe_config.json"))
 
 
 if __name__ == "__main__":
