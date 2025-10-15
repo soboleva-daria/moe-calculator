@@ -383,13 +383,6 @@ def main():
     # Load configuration
     config, precision = load_config_from_json()
     
-    # Option to override precision
-    print("\nAvailable precisions: float32, bfloat16, float16, int8, int4")
-    override = input(f"Override precision (currently {precision}, press Enter to keep): ").strip().lower()
-    
-    if override and override in PRECISION_BYTES:
-        precision = override
-    
     # Calculate and display results (only once, with final precision)
     print(calculate_moe_metrics(config, precision, "moe_config.json"))
 
