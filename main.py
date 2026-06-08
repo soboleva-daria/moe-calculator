@@ -63,7 +63,7 @@ class MoEMemoryCalculator:
     
     # ============ MEMORY CALCULATIONS ============
     
-    def calculate_embedding_weights(self) -> int:
+    def calculate_embedding_weights(self) -> float:
         """
         Embedding Weights (B) = 2 * k * V * h
         Factor of 2 accounts for input and output embedding matrices
@@ -73,7 +73,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 2 * k * V * h
     
-    def calculate_ln_weights(self) -> int:
+    def calculate_ln_weights(self) -> float:
         """
         LN Weights (B) = 4 * k * h
         """
@@ -81,7 +81,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 4 * k * h
     
-    def calculate_attention_weights(self) -> int:
+    def calculate_attention_weights(self) -> float:
         """
         Attention Weights (B) = 4 * k * h^2
         4 weight matrices: query, key, value, output, each h x h
@@ -90,7 +90,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 4 * k * h ** 2
     
-    def calculate_router_weights(self) -> int:
+    def calculate_router_weights(self) -> float:
         """
         Router Weights (B) = k * N * h
         Weight matrix of size N x h with learnable router weights
@@ -100,7 +100,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return k * N * h
     
-    def calculate_moe_layer_weights(self) -> int:
+    def calculate_moe_layer_weights(self) -> float:
         """
         MoE Layer Weights (B) = 3 * k * N * f_mult * h^2
         Each expert uses SwiGLU with three linear transformations
@@ -111,7 +111,7 @@ class MoEMemoryCalculator:
         f_mult = self.config.f_mult
         return 3 * k * N * f_mult * h ** 2
     
-    def calculate_decoder_weights(self) -> int:
+    def calculate_decoder_weights(self) -> float:
         """
         Decoder Weights (B) = LN + Attention + Router + MoE Layer
         Combines all components with layer norms already included
@@ -123,7 +123,7 @@ class MoEMemoryCalculator:
         
         return ln + attention + router + moe_layer
     
-    def calculate_model_weights(self) -> int:
+    def calculate_model_weights(self) -> float:
         """
         Model Weights (B) = Embedding + l * Decoder
         Total weights across all layers
@@ -134,7 +134,7 @@ class MoEMemoryCalculator:
         
         return embedding + l * decoder
     
-    def calculate_kv_cache(self) -> int:
+    def calculate_kv_cache(self) -> float:
         """
         KV-Cache (B) = 2 * k * l * s * h
         Cache for keys (k) and values (v) across layers l,
@@ -149,7 +149,7 @@ class MoEMemoryCalculator:
     
     # ============ FLOPS CALCULATIONS ============
     
-    def calculate_ln_flops(self) -> int:
+    def calculate_ln_flops(self) -> float:
         """
         LN Compute (FLOPs) = 14 * s * h
         """
@@ -157,7 +157,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 14 * s * h
     
-    def calculate_attention_flops(self) -> int:
+    def calculate_attention_flops(self) -> float:
         """
         Attention Compute (FLOPs) = s * (8 * h^2 + 4 * s * h + 3 * s * a)
         """
@@ -166,7 +166,7 @@ class MoEMemoryCalculator:
         a = self.config.a
         return s * (8 * h**2 + 4 * s * h + 3 * s * a)
     
-    def calculate_rope_flops(self) -> int:
+    def calculate_rope_flops(self) -> float:
         """
         RoPE Compute (FLOPs) = 0.75 * s * h
         """
@@ -174,7 +174,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 0.75 * s * h
     
-    def calculate_router_flops(self) -> int:
+    def calculate_router_flops(self) -> float:
         """
         Router Compute (FLOPs) = s * N * (2 * h + 3)
         """
@@ -183,7 +183,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return s * N * (2 * h + 3)
     
-    def calculate_moe_layer_flops(self) -> int:
+    def calculate_moe_layer_flops(self) -> float:
         """
         MoE Layer Compute (FLOPs) = 6 * top_k * s * f_mult * h * (h + 1)
         """
@@ -193,7 +193,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 6 * top_k * s * f_mult * h * (h + 1)
     
-    def calculate_unembedding_flops(self) -> int:
+    def calculate_unembedding_flops(self) -> float:
         """
         Unembedding Compute (FLOPs) = 2 * s * V * h
         """
@@ -202,7 +202,7 @@ class MoEMemoryCalculator:
         h = self.config.h
         return 2 * s * V * h
     
-    def calculate_decoder_flops(self) -> int:
+    def calculate_decoder_flops(self) -> float:
         """
         Decoder Compute (FLOPs) = LN + Attention + RoPE + Router + MoE Layer
         """
@@ -214,7 +214,7 @@ class MoEMemoryCalculator:
         
         return ln + attention + rope + router + moe_layer
     
-    def calculate_prefill_flops(self) -> int:
+    def calculate_prefill_flops(self) -> float:
         """
         Prefill (FLOPs) = l * Decoder + Unembedding
         """
@@ -226,7 +226,7 @@ class MoEMemoryCalculator:
     
     # Decode FLOPs calculations (with s=1)
     
-    def calculate_attention_flops_decode(self) -> int:
+    def calculate_attention_flops_decode(self) -> float:
         """
         Attention Compute w/ KV-Cache (FLOPs) = 8 * h^2 + 4 * s * h + 3 * s * a
         Note: s here is the context length (cached tokens)
@@ -236,7 +236,7 @@ class MoEMemoryCalculator:
         a = self.config.a
         return 8 * h**2 + 4 * s * h + 3 * s * a
     
-    def calculate_decoder_flops_decode(self) -> int:
+    def calculate_decoder_flops_decode(self) -> float:
         """
         Decoder Compute w/ KV-Cache = LN + Attention w/ KV-Cache + RoPE + Router + MoE Layer
         All components use s=1 except attention which uses cached context
@@ -258,7 +258,7 @@ class MoEMemoryCalculator:
         
         return ln + attention + rope + router + moe_layer
     
-    def calculate_decode_flops(self) -> int:
+    def calculate_decode_flops(self) -> float:
         """
         Decode (FLOPs) = l * Decoder w/ KV-Cache_{s=1} + Unembedding_{s=1}
         """
