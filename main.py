@@ -25,7 +25,11 @@ class MoEConfig:
     f_mult: float  # expert multiplier
     s: int  # sequence_length - for kv-cache calculation
     top_k: int  # number of experts activated per token
-    
+
+    def __post_init__(self):
+        if self.top_k > self.N:
+            raise ValueError(f"top_k ({self.top_k}) cannot exceed num_experts N ({self.N}).")
+
     @classmethod
     def from_dict(cls, config: Dict) -> 'MoEConfig':
         """Create config from dictionary"""
