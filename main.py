@@ -25,17 +25,27 @@ class MoEConfig:
     f_mult: float  # expert multiplier
     s: int  # sequence_length - for kv-cache calculation
     top_k: int  # number of experts activated per token
+    g: Optional[int] = None  # num_key_value_heads
 
     def __post_init__(self):
         if self.top_k > self.N:
             raise ValueError(f"top_k ({self.top_k}) cannot exceed num_experts N ({self.N}).")
+
+        if self.g is None:
+            self.g = self.a
+
+        if self.a % self.g != 0:
+            raise ValueError(f"g ({self.g}) needs to divide a ({self.a}).")
+
+        if self.h % self.a != 0:
+            raise ValueError(f"a ({self.a}) needs to divide h ({self.h}).")
 
     @classmethod
     def from_dict(cls, config: Dict) -> 'MoEConfig':
         """Create config from dictionary"""
         # Remove non-MoEConfig fields
         config_params = {k: v for k, v in config.items() 
-                        if k in ['V', 'h', 'l', 'a', 'N', 'f_mult', 's', 'top_k']}
+                        if k in ['V', 'h', 'l', 'a', 'g', 'N', 'f_mult', 's', 'top_k']}
         return cls(**config_params)
     
     @classmethod
@@ -83,12 +93,15 @@ class MoEMemoryCalculator:
     
     def calculate_attention_weights(self) -> float:
         """
-        Attention Weights (B) = 4 * k * h^2
-        4 weight matrices: query, key, value, output, each h x h
+        Attention Weights (B) = 2 * k * h^2 * (1 + g / a)
+        2 weight matrices: query and output, each h x h
+        2 weight matrices: key and value, each h x h * g / a
         """
         k = self.bytes_per_param
         h = self.config.h
-        return 4 * k * h ** 2
+        a = self.config.a
+        g = self.config.g
+        return 2 * k * h ** 2 * (1 + g / a)
     
     def calculate_router_weights(self) -> float:
         """
@@ -136,16 +149,17 @@ class MoEMemoryCalculator:
     
     def calculate_kv_cache(self) -> float:
         """
-        KV-Cache (B) = 2 * k * l * s * h
+        KV-Cache (B) = 2 * k * l * s * h / a * g
         Cache for keys (k) and values (v) across layers l,
-        sequence length s, with h/a dimension per attention head
+        sequence length s, with h / a dimension per attention head
         """
         k = self.bytes_per_param
         l = self.config.l
         s = self.config.s
         h = self.config.h
-        
-        return 2 * k * l * s * h
+        g = self.config.g 
+        a = self.config.a
+        return 2 * k * l * s * h / a * g
     
     # ============ FLOPS CALCULATIONS ============
     
@@ -159,12 +173,13 @@ class MoEMemoryCalculator:
     
     def calculate_attention_flops(self) -> float:
         """
-        Attention Compute (FLOPs) = s * (8 * h^2 + 4 * s * h + 3 * s * a)
+        Attention Compute (FLOPs) = s * (4 * h^2 * (1 + g / a) + 4 * s * h + 3 * s * a)
         """
         s = self.config.s
         h = self.config.h
         a = self.config.a
-        return s * (8 * h**2 + 4 * s * h + 3 * s * a)
+        g = self.config.g
+        return s * (4 * h**2 * (1 + g / a) + 4 * s * h + 3 * s * a)
     
     def calculate_rope_flops(self) -> float:
         """
@@ -228,13 +243,14 @@ class MoEMemoryCalculator:
     
     def calculate_attention_flops_decode(self) -> float:
         """
-        Attention Compute w/ KV-Cache (FLOPs) = 8 * h^2 + 4 * s * h + 3 * s * a
+        Attention Compute w/ KV-Cache (FLOPs) = 4 * h^2 * (1 + g / a) + 4 * s * h + 3 * s * a
         Note: s here is the context length (cached tokens)
         """
         s = self.config.s  # context length for decode
         h = self.config.h
         a = self.config.a
-        return 8 * h**2 + 4 * s * h + 3 * s * a
+        g = self.config.g
+        return 4 * h**2 * (1 + g / a) + 4 * s * h + 3 * s * a
     
     def calculate_decoder_flops_decode(self) -> float:
         """
