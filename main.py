@@ -366,7 +366,8 @@ def calculate_moe_metrics(config: MoEConfig, precision: PrecisionType,
     decode_tflops = metrics['decode_flops'] / 1e12
     
     config_header = f" ({config_name})" if config_name else ""
-    
+   
+    gqa_line = f"\n  Key and Value Heads (g): {config.g}" if config.g != config.a else ""
     result = f"""
 Memory Requirements for MoE Model{config_header}
 {'=' * 50}
@@ -374,7 +375,7 @@ Configuration:
   Vocab Size (V): {config.V:,}
   Hidden Size (h): {config.h:,}
   Num Layers (l): {config.l}
-  Attention Heads (a): {config.a}
+  Attention Heads (a): {config.a}{gqa_line}
   Num Experts (N): {config.N}
   Expert Multiplier (f_mult): {config.f_mult}
   Sequence Length (s): {config.s:,}
